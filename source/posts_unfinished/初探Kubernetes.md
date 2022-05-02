@@ -1,0 +1,61 @@
+---
+title: 初探Kubernetes
+date: 2021-07-05 17:24:57
+tags: Kubernetes
+categories: Kubernetes
+---
+
+# 什么是Kubernetes
+
+## Kubernetes的概念
+
+Kubernetes(简称k8s)是一个开源容器编排框架，主要负责管理容器(Docker容器或其他容器技术)。Kubernetes可以帮助开发人员轻松管理成百上千个容器组成的应用程序，无论这些容器部署在物理机、虚拟机还是云环境之中，甚至这些容器可以是部署在混合环境之中。
+
+## Kubernetes解决的问题
+
+微服务技术和容器技术的兴起，导致了目前的应用程序基本上都是由成百上千容器组成，大量容器还可能被部署到不同的环境中。大量的服务和容器如果仅通过自编写脚本或工具进行管理可能会非常复杂，有时甚至是不可能的。针对大量容器的管理需求衍生出了容器编排技术。类似Kubernetes这样的容器编排框架需要提供的功能周赛额来说有以下三点：
+
+<!--more-->
+
+* 保证高可用，也就是说用户可以始终访问到应用程序获得服务。
+* 可扩展性，可以很容易的通过扩展实现应用程序的高性能保障。
+* 容灾恢复，提供基础设施保证数据的备份和恢复，在应用程序运行中备份数据，在应用程序受灾恢复后及时恢复数据。
+
+Kubernetes通过将底层基础设施抽象，简化了应用程序的开发、部署，允许开发者很容易地对容器进行部署和管理。开发人员无需了解容器部署的内部细节，只需要将Kubernetes看做一个提供服务发现、服务扩容、负载均衡、容灾恢复等功能的部署平台，聚焦与应用程序核心功能的开发，提高团队开发效率及资源利用率。
+
+# Kubernetes的基本组件介绍
+
+Kubernetes提供了大量的组件来实现和简化容器编排，实际工作中可能只会用到其中一小部分核心组件。了解一些Kubernetes中的核心组件对掌握Kubernetes是很有必要的。
+
+## Node和Pod
+
+Node是Kubernetes中的一个节点，可以是物理机也可以是虚拟机环境。Pod是Kubernetes的基本组件，是Kubernetes的最小组成单位。一个Pod可以被视为是容器的抽象，Kubernetes通过Pod抽象容器使得开发者可以根据需要更换Kubernetes所使用的容器技术，开发者也不再需要与具体的容器技术(如Docker)进进行交互。
+
+一般情况下一个应用程序运行在一个Pod中，也可以将一个主应用程序和一些辅助应用程序运行在同一个Pod中。每个Pod有自己的IP地址，这个IP地址指示一个内部IP，不能用于外部通信。
+
+## Service
+
+Pod是短暂存在的，每个Pod都可能因为各种各样的原因被销毁，然后新的Pod又被创建出来替代被销毁的Pod，新的Pod将被分配一个新的Pod IP。如果使用Pod IP进行内部通信的话将会导致频繁的变更。又或者在微服务架构下，多个Pod其实提供的是相同的服务，每个Pod都有自己的Pod IP，而客户端却不应该关系提供服务的Pod的数量和对应IP等信息，因此，Kubernetes提供了一种Service(服务)组件。Service可以为一组提供相同服务的Pod提供一个单一不变的资源接入点。一个Service创建之后它的IP和端口是不会改变的。Service分为External Service(内部服务)或者Internal Service(外部服务)，不同的Service之间可以通过External Service通信，Service与外部可以通过Internal Service通信。
+
+## Ingress
+
+尽管可以通过Service暴露服务与外部进行通信，但是这种方式可以看作是通过访问Node IP以及Node上的一个端口进行通信。Kubernetes提供一种名叫Ingress的组件作为请求入口，与外部通信。Ingress管理着集群中的Service与外部之间的通信，Ingress通过一系列规则将外部请求路由转发到不同的Service中。Ingress还提供负载均衡、SSL等功能。
+
+## ConfigMap和Secret
+
+应用程序需要各种各样不同的配置信息，许多配置信息还会不定期变更。Kubernetes提供ConfigMap组件，允许开发人员将配置信息独立与应用程序之外。所有的配置信息可以存放到ConfigMap，应用程序从ConfigMap中读取配置信息，即使配置变更也无需重新创建Pod。
+
+ConfigMap中的配置以明文形式保存着，一些敏感的配置信息可以使用Secret保存。Secret和ConfigMap使用方法相同，只不过Secret更适合存储敏感的配置。
+
+## Volume
+
+Volume(卷)是Kubernetes用于存储数据的组件。Pod中的容器可以访问它们挂载的Volume。临时卷类型的生命周期与Pod 相同，但持久卷可以比Pod的存活期长。当Pod不再存在时，Kubernetes也会销毁临时卷；不过Kubernetes不会销毁持久卷。对于给定Pod中任何类型的卷，在容器重启期间数据都不会丢失。
+
+## Deployment和StatefulSet
+
+Deployment是Pod的一个抽象，实际使用Kubernetes时，不会直接使用Pod，而是使用Deployment管理Pod。Deployment可以监控Pod的健康情况并在Pod崩溃时自动重启Pod，还可以为Pod创建副本保证Pod的高可用性以及增加或减少Pod的副本数量，这使得应用程序发生错误或需要升级时仍能正常对外提供服务。
+
+Deployment适用于管理无状态的Pod，而对于类似数据库之类的有状态的服务，则需要使用StatefulSet进行抽象管理。StatefulSet和Deployment的作用类似，不过StatefulSet还将保证多个有状态的副本之间的一致性。因为保持状态的一致性是一个很复杂的问题，所以使用StatefulSet部署有状态的服务会比使用Deployment部署无状态的服务复杂得多。很多实践中会使用Kubernetes管理和部署无状态的服务，而在Kubernetes集群之外部署有状态的数据库等。
+
+# Kubernetes的基本架构
+
