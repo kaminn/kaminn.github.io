@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Lato:300,300italic,400,400italic,700,700italic|Monaco:300,300italic,400,400italic,700,700italic&display=swap&subset=latin,latin-ext">
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"kaminn.github.io","root":"/","scheme":"Mist","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":true,"show_result":true,"style":"mac"},"back2top":{"enable":true,"sidebar":false,"scrollpercent":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":true,"trigger":"auto","top_n_per_article":-1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},"path":"search.xml"};
+  </script>
+
+  <meta name="description" content="什么是KubernetesKubernetes的概念Kubernetes(简称k8s)是一个开源容器编排框架，主要负责管理容器(Docker容器或其他容器技术)。Kubernetes可以帮助开发人员轻松管理成百上千个容器组成的应用程序，无论这些容器部署在物理机、虚拟机还是云环境之中，甚至这些容器可以是部署在混合环境之中。 Kubernetes解决的问题微服务技术和容器技术的兴起，导致了目前的应用程">
+<meta property="og:type" content="website">
+<meta property="og:title" content="初探Kubernetes">
+<meta property="og:url" content="https://kaminn.github.io/posts_unfinished/%E5%88%9D%E6%8E%A2Kubernetes">
+<meta property="og:site_name" content="kaminn&#39;s blog">
+<meta property="og:description" content="什么是KubernetesKubernetes的概念Kubernetes(简称k8s)是一个开源容器编排框架，主要负责管理容器(Docker容器或其他容器技术)。Kubernetes可以帮助开发人员轻松管理成百上千个容器组成的应用程序，无论这些容器部署在物理机、虚拟机还是云环境之中，甚至这些容器可以是部署在混合环境之中。 Kubernetes解决的问题微服务技术和容器技术的兴起，导致了目前的应用程">
+<meta property="og:locale">
+<meta property="article:published_time" content="2021-07-05T09:24:57.000Z">
+<meta property="article:modified_time" content="2022-05-02T12:11:15.120Z">
+<meta property="article:author" content="kaminn">
+<meta property="article:tag" content="Kubernetes">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://kaminn.github.io/posts_unfinished/%E5%88%9D%E6%8E%A2Kubernetes">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : false,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>初探Kubernetes | kaminn's blog
+</title>
+  
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?8a557a660dfb6d4d8e2a3376ccdae50c";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">kaminn's blog</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+        <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocapitalize="off"
+           placeholder="搜索..." spellcheck="false"
+           type="search" class="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result">
+  <div id="no-result">
+    <i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+  
+  
+
+          <div class="content page posts-expand">
+            
+
+    
+    
+    
+    <div class="post-block" lang="zh-Hans">
+      <header class="post-header">
+
+<h1 class="post-title" itemprop="name headline">初探Kubernetes
+</h1>
+
+<div class="post-meta">
+  
+
+</div>
+
+</header>
+
+      
+      
+      
+      <div class="post-body">
+          <h1 id="什么是Kubernetes"><a href="#什么是Kubernetes" class="headerlink" title="什么是Kubernetes"></a>什么是Kubernetes</h1><h2 id="Kubernetes的概念"><a href="#Kubernetes的概念" class="headerlink" title="Kubernetes的概念"></a>Kubernetes的概念</h2><p>Kubernetes(简称k8s)是一个开源容器编排框架，主要负责管理容器(Docker容器或其他容器技术)。Kubernetes可以帮助开发人员轻松管理成百上千个容器组成的应用程序，无论这些容器部署在物理机、虚拟机还是云环境之中，甚至这些容器可以是部署在混合环境之中。</p>
+<h2 id="Kubernetes解决的问题"><a href="#Kubernetes解决的问题" class="headerlink" title="Kubernetes解决的问题"></a>Kubernetes解决的问题</h2><p>微服务技术和容器技术的兴起，导致了目前的应用程序基本上都是由成百上千容器组成，大量容器还可能被部署到不同的环境中。大量的服务和容器如果仅通过自编写脚本或工具进行管理可能会非常复杂，有时甚至是不可能的。针对大量容器的管理需求衍生出了容器编排技术。类似Kubernetes这样的容器编排框架需要提供的功能周赛额来说有以下三点：</p>
+<span id="more"></span>
+
+<ul>
+<li>保证高可用，也就是说用户可以始终访问到应用程序获得服务。</li>
+<li>可扩展性，可以很容易的通过扩展实现应用程序的高性能保障。</li>
+<li>容灾恢复，提供基础设施保证数据的备份和恢复，在应用程序运行中备份数据，在应用程序受灾恢复后及时恢复数据。</li>
+</ul>
+<p>Kubernetes通过将底层基础设施抽象，简化了应用程序的开发、部署，允许开发者很容易地对容器进行部署和管理。开发人员无需了解容器部署的内部细节，只需要将Kubernetes看做一个提供服务发现、服务扩容、负载均衡、容灾恢复等功能的部署平台，聚焦与应用程序核心功能的开发，提高团队开发效率及资源利用率。</p>
+<h1 id="Kubernetes的基本组件介绍"><a href="#Kubernetes的基本组件介绍" class="headerlink" title="Kubernetes的基本组件介绍"></a>Kubernetes的基本组件介绍</h1><p>Kubernetes提供了大量的组件来实现和简化容器编排，实际工作中可能只会用到其中一小部分核心组件。了解一些Kubernetes中的核心组件对掌握Kubernetes是很有必要的。</p>
+<h2 id="Node和Pod"><a href="#Node和Pod" class="headerlink" title="Node和Pod"></a>Node和Pod</h2><p>Node是Kubernetes中的一个节点，可以是物理机也可以是虚拟机环境。Pod是Kubernetes的基本组件，是Kubernetes的最小组成单位。一个Pod可以被视为是容器的抽象，Kubernetes通过Pod抽象容器使得开发者可以根据需要更换Kubernetes所使用的容器技术，开发者也不再需要与具体的容器技术(如Docker)进进行交互。</p>
+<p>一般情况下一个应用程序运行在一个Pod中，也可以将一个主应用程序和一些辅助应用程序运行在同一个Pod中。每个Pod有自己的IP地址，这个IP地址指示一个内部IP，不能用于外部通信。</p>
+<h2 id="Service"><a href="#Service" class="headerlink" title="Service"></a>Service</h2><p>Pod是短暂存在的，每个Pod都可能因为各种各样的原因被销毁，然后新的Pod又被创建出来替代被销毁的Pod，新的Pod将被分配一个新的Pod IP。如果使用Pod IP进行内部通信的话将会导致频繁的变更。又或者在微服务架构下，多个Pod其实提供的是相同的服务，每个Pod都有自己的Pod IP，而客户端却不应该关系提供服务的Pod的数量和对应IP等信息，因此，Kubernetes提供了一种Service(服务)组件。Service可以为一组提供相同服务的Pod提供一个单一不变的资源接入点。一个Service创建之后它的IP和端口是不会改变的。Service分为External Service(内部服务)或者Internal Service(外部服务)，不同的Service之间可以通过External Service通信，Service与外部可以通过Internal Service通信。</p>
+<h2 id="Ingress"><a href="#Ingress" class="headerlink" title="Ingress"></a>Ingress</h2><p>尽管可以通过Service暴露服务与外部进行通信，但是这种方式可以看作是通过访问Node IP以及Node上的一个端口进行通信。Kubernetes提供一种名叫Ingress的组件作为请求入口，与外部通信。Ingress管理着集群中的Service与外部之间的通信，Ingress通过一系列规则将外部请求路由转发到不同的Service中。Ingress还提供负载均衡、SSL等功能。</p>
+<h2 id="ConfigMap和Secret"><a href="#ConfigMap和Secret" class="headerlink" title="ConfigMap和Secret"></a>ConfigMap和Secret</h2><p>应用程序需要各种各样不同的配置信息，许多配置信息还会不定期变更。Kubernetes提供ConfigMap组件，允许开发人员将配置信息独立与应用程序之外。所有的配置信息可以存放到ConfigMap，应用程序从ConfigMap中读取配置信息，即使配置变更也无需重新创建Pod。</p>
+<p>ConfigMap中的配置以明文形式保存着，一些敏感的配置信息可以使用Secret保存。Secret和ConfigMap使用方法相同，只不过Secret更适合存储敏感的配置。</p>
+<h2 id="Volume"><a href="#Volume" class="headerlink" title="Volume"></a>Volume</h2><p>Volume(卷)是Kubernetes用于存储数据的组件。Pod中的容器可以访问它们挂载的Volume。临时卷类型的生命周期与Pod 相同，但持久卷可以比Pod的存活期长。当Pod不再存在时，Kubernetes也会销毁临时卷；不过Kubernetes不会销毁持久卷。对于给定Pod中任何类型的卷，在容器重启期间数据都不会丢失。</p>
+<h2 id="Deployment和StatefulSet"><a href="#Deployment和StatefulSet" class="headerlink" title="Deployment和StatefulSet"></a>Deployment和StatefulSet</h2><p>Deployment是Pod的一个抽象，实际使用Kubernetes时，不会直接使用Pod，而是使用Deployment管理Pod。Deployment可以监控Pod的健康情况并在Pod崩溃时自动重启Pod，还可以为Pod创建副本保证Pod的高可用性以及增加或减少Pod的副本数量，这使得应用程序发生错误或需要升级时仍能正常对外提供服务。</p>
+<p>Deployment适用于管理无状态的Pod，而对于类似数据库之类的有状态的服务，则需要使用StatefulSet进行抽象管理。StatefulSet和Deployment的作用类似，不过StatefulSet还将保证多个有状态的副本之间的一致性。因为保持状态的一致性是一个很复杂的问题，所以使用StatefulSet部署有状态的服务会比使用Deployment部署无状态的服务复杂得多。很多实践中会使用Kubernetes管理和部署无状态的服务，而在Kubernetes集群之外部署有状态的数据库等。</p>
+<h1 id="Kubernetes的基本架构"><a href="#Kubernetes的基本架构" class="headerlink" title="Kubernetes的基本架构"></a>Kubernetes的基本架构</h1>
+      </div>
+      
+      
+      
+    </div>
+    
+
+    
+    
+    
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E4%BB%80%E4%B9%88%E6%98%AFKubernetes"><span class="nav-number">1.</span> <span class="nav-text">什么是Kubernetes</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Kubernetes%E7%9A%84%E6%A6%82%E5%BF%B5"><span class="nav-number">1.1.</span> <span class="nav-text">Kubernetes的概念</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Kubernetes%E8%A7%A3%E5%86%B3%E7%9A%84%E9%97%AE%E9%A2%98"><span class="nav-number">1.2.</span> <span class="nav-text">Kubernetes解决的问题</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Kubernetes%E7%9A%84%E5%9F%BA%E6%9C%AC%E7%BB%84%E4%BB%B6%E4%BB%8B%E7%BB%8D"><span class="nav-number">2.</span> <span class="nav-text">Kubernetes的基本组件介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Node%E5%92%8CPod"><span class="nav-number">2.1.</span> <span class="nav-text">Node和Pod</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Service"><span class="nav-number">2.2.</span> <span class="nav-text">Service</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Ingress"><span class="nav-number">2.3.</span> <span class="nav-text">Ingress</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ConfigMap%E5%92%8CSecret"><span class="nav-number">2.4.</span> <span class="nav-text">ConfigMap和Secret</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Volume"><span class="nav-number">2.5.</span> <span class="nav-text">Volume</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Deployment%E5%92%8CStatefulSet"><span class="nav-number">2.6.</span> <span class="nav-text">Deployment和StatefulSet</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Kubernetes%E7%9A%84%E5%9F%BA%E6%9C%AC%E6%9E%B6%E6%9E%84"><span class="nav-number">3.</span> <span class="nav-text">Kubernetes的基本架构</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="kaminn"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">kaminn</p>
+  <div class="site-description" itemprop="description">从来也没有什么救世主，也不靠神仙皇帝</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">1</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2022</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">kaminn</span>
+</div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+  
+<script src="/js/local-search.js"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
