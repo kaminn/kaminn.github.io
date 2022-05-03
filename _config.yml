@@ -104,7 +104,7 @@ theme: next
 deploy:
   type: git
   repo: https://github.com/kaminn/kaminn.github.io
-  branch: main
+  branch: gh_pages
 
 search:
   path: search.xml
