@@ -111,4 +111,71 @@
         <tag>CMU 15-445</tag>
       </tags>
   </entry>
+  <entry>
+    <title>CMU 15-445 Project 2 Hash Index</title>
+    <url>/2022/05/15/CMU-15-445-Project-2-Hash-Index/</url>
+    <content><![CDATA[<h1 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h1><p>CMU 15-445 Fall 2021的第二个project是实现一个hash table，用以支持Bustub实现哈希索引。Project 2需要实现的hash table使用<code>extendible hashing scheme</code>也就是可扩展散列的技术。<code>Extendible hashing</code>是一种动态散列的模式，当数据库增大或缩小的时候，<code>extendible hashing</code>可以通过桶的分裂和合并来适应数据库大小的变化，每次重组仅作用于一个桶，避免了对整个结构全局频繁的重组操作，降低了性能开销。</p>
+<p>和Project 1类似，我们需要实现预先提供的代码中声明的API，从而完成<code>extendible hashing</code>哈希索引的实现。</p>
+<p>整个Project 2页拆分成了三个任务:</p>
+<ul>
+<li><strong>Page Layouts</strong></li>
+<li><strong>Extendible Hashing Implementation</strong></li>
+<li><strong>Concurrency Control</strong></li>
+</ul>
+<p>第一个任务我们需要实现<code>Directory Page</code>和<code>Bucket Page</code>，<code>Directory Page</code>保存着哈希表的所有元数据，记录着<code>Bucket Page</code>相关的信息，而<code>Bucket Page</code>则保存着实际的数据，以及相关的元数据；第二个任务我们需要按照算法实现<code>extendible hashing</code>，实现包括查找、插入、删除等操作；第三个任务则需要在已实现<code>extendible hashing</code>的基础上，实现并发访问的控制。</p>
+<h1 id="Page-Layouts"><a href="#Page-Layouts" class="headerlink" title="Page Layouts"></a>Page Layouts</h1><p>我们需要实现的hash table需要通过数据库中的buffer Pool进行访问而不是通过我们自己分配内存来实现数据存取。Buffer Pool的操作是基于页的，所以我们需要实现<code>HashTableDirectoryPage</code>和<code>HashTableBucketPage</code>两个类来定义hash table的页。</p>
+<h2 id="HashTableDirectoryPage"><a href="#HashTableDirectoryPage" class="headerlink" title="HashTableDirectoryPage"></a>HashTableDirectoryPage</h2><p><code>HashTableDirectoryPage</code>类表示hash table的元数据，类中有以下属性：</p>
+<figure class="highlight c++"><table><tr><td class="code"><pre><span class="line"><span class="comment">/** page id **/</span></span><br><span class="line"><span class="type">page_id_t</span> page_id_;</span><br><span class="line"><span class="comment">/** 日志号，后面的project会用到**/</span></span><br><span class="line"><span class="type">lsn_t</span> lsn_;</span><br><span class="line"><span class="comment">/** 全局depth,depth表示使用hash的几个bit来定位数据，后面详细介绍 **/</span></span><br><span class="line"><span class="type">uint32_t</span> global_depth_&#123;<span class="number">0</span>&#125;;</span><br><span class="line"><span class="comment">/** 每个bucket对应的局部depth **/</span></span><br><span class="line"><span class="type">uint8_t</span> local_depths_[DIRECTORY_ARRAY_SIZE];</span><br><span class="line"><span class="comment">/** 所有bucket的page id **/</span></span><br><span class="line"><span class="type">page_id_t</span> bucket_page_ids_[DIRECTORY_ARRAY_SIZE];</span><br></pre></td></tr></table></figure>
+
+<p><code>HashTableDirectoryPage</code>中主要提供一些简单的方法来维护这些元数据，比如<code>IncrGlobalDepth()</code>和<code>DecrGlobalDepth()</code>等，实现都比较简单，这里不再细说，只挑选几个我认为比较有用的helper方法讲讲作用和实现：</p>
+<ul>
+<li><p><code>GetGlobalDepthMask</code></p>
+<p>这个方法返回一个二进制表示为n位全1的uint32_t类型值，其中n等于<code>global_depth_</code>，把它与key的hash相与得到key所在的bucket的位置。实现为将1左移<code>global_depth_</code>位后减1。</p>
+</li>
+<li><p><code>GetSplitImageIndex(uint32_t bucket_idx)</code></p>
+<p>bucket在数据已满的时候需要分裂一个新的bucket来保存数据，这个新的bucket所在的位置由这个方法来获得，其实现我们放到后面实现<code>extendible hashing</code>算法的时候来描述。</p>
+</li>
+<li><p><code>CanShrink()</code></p>
+<p>这个方法用于判断当前hash table是否可以收缩，回收那些没有用到的bucket，其实现我们放到后面实现<code>extendible hashing</code>算法的时候来描述。</p>
+</li>
+</ul>
+<h2 id="HashTableBucketPage"><a href="#HashTableBucketPage" class="headerlink" title="HashTableBucketPage"></a>HashTableBucketPage</h2><p><code>HashTableBucketPage</code>类是实际存储数据的地方，它有以下属性：</p>
+<figure class="highlight c++"><table><tr><td class="code"><pre><span class="line"><span class="comment">/** 如果occupied_中第i个位为1表示array_数组中第i个元素有插入过数据 **/</span></span><br><span class="line"><span class="type">char</span> occupied_[(BUCKET_ARRAY_SIZE - <span class="number">1</span>) / <span class="number">8</span> + <span class="number">1</span>];</span><br><span class="line"><span class="comment">/** 如果readable_中第i个位为1表示array_数组中第i个元素有可读的数据 **/</span></span><br><span class="line"><span class="type">char</span> readable_[(BUCKET_ARRAY_SIZE - <span class="number">1</span>) / <span class="number">8</span> + <span class="number">1</span>];</span><br><span class="line"><span class="comment">/** 零长数组，保存key-value的值**/</span></span><br><span class="line">MappingType array_[<span class="number">0</span>];</span><br></pre></td></tr></table></figure>
+
+<p>这里<code>occupied_</code>和<code>readable_</code>的区别需要注意下，如果在<code>array_</code>的一个位置上插入了一个key-value对，那相应的<code>occupied_</code>和<code>readable_</code>上对应位置均需要置为1，但是如果将该位置上的元素删除，只需要将<code>readable_</code>中对应位置置为0即可，<code>occupied_</code>保持为1就好。<code>occupied_</code>和<code>readable_</code>均使用1个bit来标记一个元素的状态，因此更新对应<code>array_</code>位置上元素的状态时需要通过一些位运算来找到<code>occupied_</code>和<code>readable_</code>上对应的bit。</p>
+<p>Key-value对的插入和删除比较简单，插入前先遍历一遍看下待插入的key-value是否已存在，已存在返回false，否则就找到第一个<code>readable_</code>为0的位置插入即可。删除key-value对只需要遍历找到对应的位置，将该位置的<code>readable_</code>设为0即可。</p>
+<p>第一个任务中我们只需要实现<code>HashTableDirectoryPage</code>中的<code>GetGlobalDepth</code> , <code>IncrGlobalDepth</code>,  <code>SetLocalDepth</code> , <code>SetBucketPageId</code>,  <code>GetBucketPageId</code>方法和<code>HashTableBucketPage</code>中的<code>Insert</code>, <code>Remove</code>, <code>IsOccupied</code>, <code>IsReadable</code>, <code>KeyAt</code>, <code>ValueAt</code>方法即可，不过在实现<code>extendible hashing</code>的过程中，我们可能会用到一些其他有用的方法，我们可以自己下来实现，比如上面讲到的<code>GetGlobalDepthMask</code>等，在下面实现<code>extendible hashing</code>算法的时候再来介绍。</p>
+<p>还有一个需要注意的地方是，我们的<code>HashTableDirectoryPage</code>和<code>HashTableBucketPage</code>是从buffer Pool中获取来的，在实现中时直接使用<code>reinterpret_cast</code>从<code>Page</code>类型转换而来的，对应的就是<code>Page</code>类型头部的4k大小的<code>data_</code>，因此如非必要最好不要在<code>HashTableDirectoryPage</code>和<code>HashTableBucketPage</code>类中再添加额外的成员变量。<code>HashTableDirectoryPage</code>中因为<code>DIRECTORY_ARRAY_SIZE</code>定义为512所以4k的空间还算富裕，<code>HashTableBucketPage</code>中因为会保存大量的数据，可能会占用到4k的空间，如果再添加额外的属性可能导致访问越界，从而修改到<code>Page</code>类中的一些属性，导致问题的发生。</p>
+<p><img src="https://images-1253386616.cos.ap-guangzhou.myqcloud.com/page%20layout.png" alt="page layout"></p>
+<h1 id="Extendible-Hashing-Implementation"><a href="#Extendible-Hashing-Implementation" class="headerlink" title="Extendible Hashing Implementation"></a>Extendible Hashing Implementation</h1><p>我们需要按照算法描述实现<code>extendible hashing</code>算法。<code>Extendible hashing</code>是一种dynamic hash的算法，通过动态扩展的方法来解决hash冲突。<code>extendible hash table</code>分为两部分，一部分称为directory，根据数据的hash值不同将数据分散到不同的directory上，另一部分称为bucket，是真正存储数据的部分，在同一个bucket上的数据hash值相同。</p>
+<p><code>Extendible hashing</code>中有一个<code>golbal depth</code>计数器，表示用数据的hash值的几位二进制位来定位该数据应该在哪个bucket之中。每个bucket上维护着自己的<code>local depth</code>，表示该bucket中的数据是用的几位hash值的二进制位来定位到这个bucket的。</p>
+<p><img src="https://images-1253386616.cos.ap-guangzhou.myqcloud.com/extendible%20hash.png" alt="extendible hash"></p>
+<p>如上图展示了一个<code>global depth</code>为2的<code>extendible hash table</code>，其中directory长度为4（directory长度总为<code>global depth</code>的2次幂）。总共有3个bucket，bucket中的数字表示的是bucket保存的数据的二进制hash值，根据hash值的LSB（最低有效位）来索引bucket，3个bucket的<code>local depth</code>分别为1、2、2，<code>local depth</code>总是小于等于<code>global depth</code>。</p>
+<p><code>Extendible hashtable</code>的查找就是简单地根据<code>global depth</code>和hash值定位bucket，然后遍历bucket查找即可。继续以上图为例，如果我们需要在hash table中查找<code>11011001</code>这个值，根据<code>global depth</code>为2，取<code>11011001</code>后两位<code>01</code>，定位到对应的bucket，找到了对应的数据。</p>
+<p><code>Extendible hashtable</code>插入数据时，也是先根据<code>global depth</code>和hash值定位需要插入的bucket，如果bucket未满，则直接将数据插入到bucket即可。如果bucket已满，则需要分裂bucket，也就是新开一个bucket用来保存数据。</p>
+<p><img src="https://images-1253386616.cos.ap-guangzhou.myqcloud.com/extendible%20hash-split.png" alt="extendible hash-split"></p>
+<p>如上图所示，假如我们要在这个hash table中插入hash值为<code>10100010</code>的数据，根据当前的<code>global depth</code>我们定位到<code>10</code>位置的bucket，我们可以看到<code>00</code>和<code>10</code>所指向的bucket为同一个bucket，原因我们后面分析，我们现在需要关注的是目前这个bucket中已经没有剩余的位置可以插入数据了，所以我们需要分裂bucket以便插入数据。我们先将这个bucket的<code>local depth</code>加1，然后将<code>10</code>位置指向一个新开的bucket，这个新开的bucket我们称为原来的bucket的<code>split image</code>，新bucket的<code>local depth</code>和原bucket加1后的<code>local depth</code>一样。分裂bucket完成之后我们需要将原bucket上的数据重新按<code>global depth</code>插入到相应的bucket中，然后再插入我们待插入的数据，这里<code>10100010</code>插入了<code>10</code>位置的bucket，也就是我们新开的那个bucket。</p>
+<p>在分裂bucket的时候还有一种情况，即未分裂时bucket的<code>local depth</code>等于<code>global depth</code>时，我们需要扩展directory以索引更多的bucket。</p>
+<p><img src="https://images-1253386616.cos.ap-guangzhou.myqcloud.com/extendible%20hash-growth.png" alt="extendible hash-growth"></p>
+<p>如上图所示，当我们想要继续插入<code>11110110</code>到hash table中时，我们发现索引到的<code>10</code>位置的bucket已经满了并且<code>local depth</code>等于<code>global depth</code>，这时我们需要扩展directory的大小。<code>global depth</code>增加1，表示我们需要3个二进制位来索引bucket，directory的长度也应该扩展一倍。扩展后的directory可以索引更多的bucket，但是我们不会立即开辟新的bucket，而是将扩展部分的directory index指向已存在的bucket，<code>100</code>指向<code>000</code>所指向的bucket，<code>101</code>指向<code>001</code>所指向的bucket……以此类推，这样就完成了directory的扩展。接下来再按照分裂bucket的步骤进行插入即可。可以看到，directory发生扩展之后就会出现多个位置指向同一个bucket的情况，也就是上面我们留下的问题的答案。每次hash table扩容时，我们只需要重新处理局部的数据就可以完成扩容，而不需要重建整个hash table。</p>
+<p>当删除bucket上的数据之后，如果bucket为空，我们可以合并bucket。合并bucket在某些<code>extendible hashing</code>上是没有被实现的，因为合并bucket可能在某些场景下产生性能抖动。当bucket为空，bucket与其<code>split image</code>的<code>local depth</code>相等且大于0时，bucket才可以与其<code>split image</code>合并。合并bucket就是将原本指向bucket的索引指向其<code>split image</code>，然后<code>local depth</code>减1，这样空bucket就不再存在于hash table之中。当hash table中合并的bucket越来越多时，很多不同的位置都是指向的同一个bucket，这时还可以进行directory的收缩，当且仅当所有bucket的<code>local depth</code>都小于<code>global depth</code>时，directory才可以进行收缩，收缩directory需要将<code>global depth</code>减1。</p>
+<p>以上就是<code>extendible hashing</code>算法的描述，包括了查找、插入、删除、bucket的分裂和合并，directory的扩展和收缩等操作。在实现project时，如第一个任务所述，我们的directory和bucket是基于buffer pool来管理的，所以我们会用到<code>BufferPoolManagerInstance</code>类提供的API。当我们需要新开辟directory或bucket时，我们需要调用<code>NewPage</code>来申请一个新的页，并将返回的<code>Page</code>对象转换为<code>HashTableDirectoryPage</code>或<code>HashTableBucketPage</code>对象，使用一个已申请的页时需要调用<code>FetchPage</code>，当页使用完毕时调用<code>UnpinPage</code>取消页的固定，并根据页的变更状态正确设置<code>is_dirty</code> flag以保证写入的数据能够被安全地写入磁盘。</p>
+<p>在实现这一任务的时候，我们可以不用考虑多线程并发时线程安全问题的处理，只需要实现单线程下的行为正确的<code>extendibel hashing</code>算法即可。</p>
+<h1 id="Concurrency-Control"><a href="#Concurrency-Control" class="headerlink" title="Concurrency Control"></a>Concurrency Control</h1><p>在这一任务中我们需要实现并发安全的<code>extendibel hashing</code>算法。在实现上一任务的基础之上，我们需要使用锁来保护并发访问时的hash table。</p>
+<p>代码中提供了两种粒度的锁，一种是定义于<code>ExtendibleHashTable</code>类中的<code>table_latch_</code>，锁的粒度为整个hash table实例，一种是<code>Page</code>类中的<code>rwlatch_</code>，锁的粒度为对应的<code>Page</code>对象，看代码的实现我们可以看到它们都是<code>ReaderWriterLatch</code>封装的读写锁，锁实现均为不可重入锁。</p>
+<p>我们只有在需要对directory或bucket进行写入操作时才去获取对应粒度的写锁，其他时候一律只获取读锁。因为<code>global dept</code>、<code>local depth</code>、bucket page id等元数据都是在<code>HashTableDirectoryPage</code>类中维护的，因此我们可以等到存在数据操作时才对bucket进行加锁。还有一个点需要注意的是，当后续操作可能需要写锁时，就在操作最开始获取写锁，不要先获取读锁然后当需要写锁时才去获取写锁，因为代码中的锁是不可重入锁，获取另一个锁之前需要先释放持有的锁，这期间就有可能发生竞争，反而会产生并发问题，性能也不会得到优化。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>第二个project的难度相比第一个要大一点，主要是PPT中描述的<code>extendibel hashing</code>有些抽象导致理解多花费了些时间，选择采用LSB来定位bucket之后，实现的难度和理解起来其实会比PPT中使用MSB要简单些。</p>
+<p><img src="https://images-1253386616.cos.ap-guangzhou.myqcloud.com/image-1654531228246.png" alt="image-1654531228246"></p>
+<p>本次project实现的<code>extendibel hashing</code>可以作为实现数据库hash索引的基础。课程中还提到一种数据结构 - B+树，它也是实现数据库索引的一种优秀的数据结构，在2020学年的project 2是实现的B+树，我也准备尝试一下B+树的实现，以及B+树的并发安全访问实现。</p>
+]]></content>
+      <categories>
+        <category>数据库</category>
+        <category>公开课</category>
+      </categories>
+      <tags>
+        <tag>数据库</tag>
+        <tag>公开课</tag>
+        <tag>CMU 15-445</tag>
+      </tags>
+  </entry>
 </search>
