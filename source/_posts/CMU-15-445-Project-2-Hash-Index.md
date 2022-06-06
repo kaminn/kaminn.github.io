@@ -24,6 +24,8 @@ CMU 15-445 Fall 2021的第二个project是实现一个hash table，用以支持B
 
 第一个任务我们需要实现`Directory Page`和`Bucket Page`，`Directory Page`保存着哈希表的所有元数据，记录着`Bucket Page`相关的信息，而`Bucket Page`则保存着实际的数据，以及相关的元数据；第二个任务我们需要按照算法实现`extendible hashing`，实现包括查找、插入、删除等操作；第三个任务则需要在已实现`extendible hashing`的基础上，实现并发访问的控制。
 
+<!--more-->
+
 # Page Layouts
 
 我们需要实现的hash table需要通过数据库中的buffer Pool进行访问而不是通过我们自己分配内存来实现数据存取。Buffer Pool的操作是基于页的，所以我们需要实现`HashTableDirectoryPage`和`HashTableBucketPage`两个类来定义hash table的页。
